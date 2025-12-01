@@ -1,9 +1,7 @@
-// server.js - Backend proxy for Unusual Markets
-// Keeps your API keys secure server-side
-
+// server.js - Kalshi Terminal with API Key Authentication
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
@@ -12,103 +10,138 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // Serve the HTML file
+app.use(express.static('public'));
 
-// API Configuration from environment variables
-const KALSHI_EMAIL = process.env.KALSHI_EMAIL;
-const KALSHI_PASSWORD = process.env.KALSHI_PASSWORD;
+// Kalshi API Configuration from Environment Variables
+const KALSHI_API_KEY_ID = process.env.KALSHI_API_KEY_ID;
+const KALSHI_PRIVATE_KEY = process.env.KALSHI_PRIVATE_KEY;
+const BASE_URL = 'https://api.elections.kalshi.com';
 
-// Cache for Kalshi token
-let kalshiToken = null;
-let tokenExpiry = null;
+console.log('🚀 Starting Kalshi Terminal...');
+console.log(`📍 API Key ID: ${KALSHI_API_KEY_ID ? '✅ Set' : '❌ Missing'}`);
+console.log(`🔑 Private Key: ${KALSHI_PRIVATE_KEY ? '✅ Set' : '❌ Missing'}`);
 
-// Login to Kalshi and get token
-async function getKalshiToken() {
-    // Return cached token if still valid
-    if (kalshiToken && tokenExpiry && Date.now() < tokenExpiry) {
-        return kalshiToken;
+// Sign request for Kalshi API
+function signRequest(method, path) {
+    if (!KALSHI_PRIVATE_KEY || !KALSHI_API_KEY_ID) {
+        return null;
     }
+
+    const timestamp = Date.now().toString();
+    const pathWithoutQuery = path.split('?')[0];
+    const msgString = timestamp + method + pathWithoutQuery;
 
     try {
-        const response = await fetch('https://trading-api.kalshi.com/trade-api/v2/login', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-                email: KALSHI_EMAIL,
-                password: KALSHI_PASSWORD
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Kalshi login failed:', response.status, errorText);
-            throw new Error(`Kalshi login failed: ${response.status}`);
-        }
-
-        const data = await response.json();
-        kalshiToken = data.token;
+        const sign = crypto.createSign('RSA-SHA256');
+        sign.update(msgString);
+        sign.end();
         
-        // Token valid for 30 minutes, cache for 25 minutes
-        tokenExpiry = Date.now() + (25 * 60 * 1000);
-        
-        console.log('✅ Kalshi authentication successful');
-        return kalshiToken;
+        const signature = sign.sign({
+            key: KALSHI_PRIVATE_KEY,
+            padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+            saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST
+        }, 'base64');
+
+        return {
+            'KALSHI-ACCESS-KEY': KALSHI_API_KEY_ID,
+            'KALSHI-ACCESS-SIGNATURE': signature,
+            'KALSHI-ACCESS-TIMESTAMP': timestamp,
+            'Content-Type': 'application/json'
+        };
     } catch (error) {
-        console.error('Kalshi authentication error:', error);
-        throw error;
+        console.error('❌ Error signing request:', error.message);
+        return null;
     }
+}
+
+// Fetch real Kalshi markets
+async function fetchKalshiMarkets() {
+    const path = '/trade-api/v2/markets?limit=100&status=active';
+    const headers = signRequest('GET', path);
+
+    if (!headers) {
+        throw new Error('Could not sign request - check API keys');
+    }
+
+    const response = await fetch(BASE_URL + path, { headers });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Kalshi API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.markets || [];
+}
+
+// Generate demo markets (fallback)
+function generateDemoMarkets() {
+    const categories = ['Politics', 'Economics', 'Sports', 'Entertainment', 'Climate', 'Science'];
+    const titles = [
+        'Will the Fed cut rates by 25+ basis points in December?',
+        'Trump approval rating above 50% by end of month',
+        'Will Bitcoin reach $100k by year end?',
+        'S&P 500 above 6000 this quarter',
+        'Will there be a government shutdown this month?',
+        'Next Supreme Court appointment in 2025',
+        'Will unemployment rate drop below 3.5%?',
+        'Super Bowl LXI winner - Kansas City Chiefs',
+        'Will Taylor Swift release new album in 2025?',
+        'Will there be a recession in 2025?',
+        'US inflation rate below 2% this year',
+        'Will there be a TikTok ban in the US?',
+        'Apple stock to hit $250 by Q2 2025',
+        'Will gas prices exceed $4.50 nationally?',
+        'NBA MVP for 2024-25 season - Giannis',
+        'Will there be a major hurricane this season?',
+        'AI breakthrough announcement by major lab',
+        'Will Tesla stock hit $300 in 2025?',
+        'Congressional approval rating above 25%',
+        'Will student loan forgiveness pass in 2025?'
+    ];
+
+    return titles.map((title, i) => ({
+        ticker: `KALSHI-DEMO-${i}`,
+        title: title,
+        category: categories[Math.floor(Math.random() * categories.length)],
+        last_price: Math.random() * 0.8 + 0.1,
+        volume_24h: Math.floor(Math.random() * 2000000) + 100000,
+        open_interest: Math.floor(Math.random() * 8000) + 500
+    }));
 }
 
 // Endpoint: Fetch Kalshi markets
 app.get('/api/kalshi/markets', async (req, res) => {
     try {
-        if (!KALSHI_EMAIL || !KALSHI_PASSWORD) {
-            return res.json({ 
-                success: false, 
-                message: 'Kalshi credentials not configured',
-                markets: [] 
-            });
-        }
+        let markets;
+        let isDemo = false;
 
-        const token = await getKalshiToken();
-        
-        const response = await fetch('https://trading-api.kalshi.com/trade-api/v2/markets?limit=100&status=active', {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
+        // Try real API if keys are configured
+        if (KALSHI_PRIVATE_KEY && KALSHI_API_KEY_ID) {
+            try {
+                console.log('📊 Fetching real Kalshi markets...');
+                markets = await fetchKalshiMarkets();
+                console.log(`✅ Fetched ${markets.length} real Kalshi markets`);
+            } catch (error) {
+                console.error('❌ Error fetching real markets:', error.message);
+                console.log('⚠️  Falling back to demo mode');
+                markets = generateDemoMarkets();
+                isDemo = true;
             }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Kalshi API error: ${response.status}`);
+        } else {
+            console.log('📊 Using demo mode (API keys not configured)');
+            markets = generateDemoMarkets();
+            isDemo = true;
         }
-
-        const data = await response.json();
-        const markets = data.markets || [];
-
-        // Transform to our format
-        const transformedMarkets = markets.map(m => ({
-            id: m.ticker,
-            platform: 'Kalshi',
-            title: m.title || 'Unknown Market',
-            category: m.category || 'Other',
-            currentPrice: ((m.last_price || 0) * 100).toFixed(1),
-            volume24h: m.volume_24h || 0,
-            trades24h: m.open_interest || 0,
-            url: `https://kalshi.com/markets/${m.ticker}`
-        }));
 
         res.json({
             success: true,
-            markets: transformedMarkets
+            demo: isDemo,
+            markets: markets
         });
-
     } catch (error) {
-        console.error('Error fetching Kalshi markets:', error);
-        res.status(500).json({
+        console.error('Error:', error);
+        res.json({
             success: false,
             message: error.message,
             markets: []
@@ -116,82 +149,71 @@ app.get('/api/kalshi/markets', async (req, res) => {
     }
 });
 
-// Endpoint: Fetch all markets (Kalshi only)
+// Endpoint: Process markets with unusual activity
 app.get('/api/markets', async (req, res) => {
     try {
-        // Fetch only Kalshi markets
-        const kalshiRes = await fetch(`http://localhost:${PORT}/api/kalshi/markets`).then(r => r.json());
-        
-        let allMarkets = kalshiRes.markets || [];
+        const response = await fetch(`http://localhost:${PORT}/api/kalshi/markets`);
+        const data = await response.json();
 
-        // Calculate price changes, volume changes, and unusual activity
-        // Note: This is simplified - in production you'd track historical data
-        allMarkets = allMarkets.map(m => {
-            // Simulate price and volume changes (replace with real historical data)
-            const priceChange = (Math.random() * 30 - 15).toFixed(1);
+        if (!data.success) {
+            return res.json({ success: false, markets: [] });
+        }
+
+        // Transform markets
+        const transformedMarkets = data.markets.map(m => {
             const volumeChange = (Math.random() * 350 - 20).toFixed(0);
-            
-            const isUnusual = Math.abs(parseFloat(volumeChange)) > 100 || 
-                             Math.abs(parseFloat(priceChange)) > 10;
-            
-            const hotnessScore = Math.min(100, Math.floor(
-                (Math.abs(parseFloat(volumeChange)) / 2) + 
-                (Math.abs(parseFloat(priceChange)) * 3)
-            ));
+            const priceChange = (Math.random() * 30 - 15).toFixed(1);
+            const isUnusual = Math.abs(volumeChange) > 100 || Math.abs(priceChange) > 10;
 
             return {
-                ...m,
-                priceChange,
-                volumeChange,
+                id: m.ticker,
+                platform: 'Kalshi',
+                title: m.title,
+                category: m.category,
+                currentPrice: (m.last_price * 100).toFixed(1),
+                priceChange: priceChange,
+                volume24h: m.volume_24h,
+                volumeChange: volumeChange,
+                trades24h: m.open_interest,
                 unusual: isUnusual,
-                hotnessScore
+                hotnessScore: Math.min(100, Math.floor((Math.abs(volumeChange) / 2) + (Math.abs(priceChange) * 3)))
             };
         });
 
         res.json({
             success: true,
-            timestamp: new Date().toISOString(),
-            count: allMarkets.length,
-            markets: allMarkets
+            demo: data.demo,
+            markets: transformedMarkets,
+            timestamp: new Date().toISOString()
         });
-
     } catch (error) {
-        console.error('Error fetching markets:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message,
-            markets: []
-        });
+        console.error('Error processing markets:', error);
+        res.json({ success: false, markets: [] });
     }
 });
 
-// Health check endpoint
+// Health check
 app.get('/health', (req, res) => {
+    const hasKeys = !!(KALSHI_PRIVATE_KEY && KALSHI_API_KEY_ID);
     res.json({ 
-        status: 'ok', 
-        timestamp: new Date().toISOString(),
-        kalshiConfigured: !!(KALSHI_EMAIL && KALSHI_PASSWORD)
+        status: 'ok',
+        mode: hasKeys ? 'Real Data (API Keys)' : 'Demo Mode',
+        configured: hasKeys
     });
 });
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`
-╔══════════════════════════════════════════════════════════╗
-║         Unusual Markets API Server (Kalshi)               ║
-║                                                          ║
-║  Server running on: http://localhost:${PORT}              ║
-║                                                          ║
-║  Endpoints:                                              ║
-║  GET  /api/markets         - All Kalshi markets          ║
-║  GET  /api/kalshi/markets  - Kalshi markets              ║
-║  GET  /health              - Health check                ║
-║                                                          ║
-║  Frontend: http://localhost:${PORT}                       ║
-╚══════════════════════════════════════════════════════════╝
-
-Kalshi credentials: ${KALSHI_EMAIL && KALSHI_PASSWORD ? '✓ Configured' : '✗ Not configured'}
-
-Ready to serve markets! 🚀
-    `);
+    console.log(`\n✅ Server running on port ${PORT}`);
+    console.log(`🌐 Access at: http://localhost:${PORT}\n`);
+    
+    if (KALSHI_PRIVATE_KEY && KALSHI_API_KEY_ID) {
+        console.log(`🔑 Mode: REAL DATA (Using Kalshi API Keys)`);
+        console.log(`✅ Ready to fetch live Kalshi markets!\n`);
+    } else {
+        console.log(`📊 Mode: DEMO (API keys not configured)`);
+        console.log(`💡 To use real Kalshi data, add to Railway Variables:`);
+        console.log(`   KALSHI_API_KEY_ID = your-key-id`);
+        console.log(`   KALSHI_PRIVATE_KEY = your-private-key\n`);
+    }
 });
