@@ -57,7 +57,7 @@ function signRequest(method, path) {
 
 // Fetch real Kalshi markets
 async function fetchKalshiMarkets() {
-    const path = '/trade-api/v2/markets?limit=100&status=active';
+    const path = '/trade-api/v2/markets?limit=200&status=active'; // Increased from 100 to 200
     const headers = signRequest('GET', path);
 
     if (!headers) {
