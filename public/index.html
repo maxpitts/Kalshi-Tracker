@@ -389,6 +389,9 @@
             text-align: center;
             transition: all 0.2s;
             cursor: pointer;
+            text-decoration: none;
+            display: block;
+            color: inherit;
         }
 
         .price-btn:hover {
@@ -401,8 +404,9 @@
         }
 
         .yes-btn:hover {
-            background: rgba(0, 255, 136, 0.05);
+            background: rgba(0, 255, 136, 0.1);
             border-color: var(--accent-green);
+            box-shadow: 0 4px 20px rgba(0, 255, 136, 0.3);
         }
 
         .no-btn {
@@ -410,12 +414,13 @@
         }
 
         .no-btn:hover {
-            background: rgba(255, 68, 68, 0.05);
+            background: rgba(255, 68, 68, 0.1);
             border-color: var(--accent-red);
+            box-shadow: 0 4px 20px rgba(255, 68, 68, 0.3);
         }
 
         .btn-label {
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 700;
             color: var(--text-dim);
             margin-bottom: 6px;
@@ -433,6 +438,51 @@
         .btn-subtext {
             font-size: 11px;
             color: var(--text-secondary);
+        }
+
+        .market-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .action-btn {
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .action-btn.primary {
+            background: var(--accent-blue);
+            color: var(--terminal-bg);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .action-btn.primary:hover {
+            background: transparent;
+            color: var(--accent-blue);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+        }
+
+        .action-btn.secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--terminal-border);
+        }
+
+        .action-btn.secondary:hover {
+            color: var(--text-primary);
+            border-color: var(--accent-blue);
+            background: rgba(0, 212, 255, 0.05);
         }
 
         .market-stats-new {
@@ -892,18 +942,24 @@
             const platformClass = market.platform.toLowerCase();
             const unusualClass = market.unusual ? 'unusual' : '';
 
-            // Calculate YES and NO percentages
+            // Calculate YES and NO percentages and prices in dollars
             const yesPercent = Math.round(parseFloat(market.currentPrice));
             const noPercent = 100 - yesPercent;
-            const yesPrice = parseFloat(market.currentPrice).toFixed(1);
-            const noPrice = (100 - parseFloat(market.currentPrice)).toFixed(1);
+            const yesPriceDollars = (parseFloat(market.currentPrice) / 100).toFixed(2);
+            const noPriceDollars = ((100 - parseFloat(market.currentPrice)) / 100).toFixed(2);
+            
+            // Create Kalshi URL
+            const kalshiUrl = `https://kalshi.com/markets/${market.id}`;
+            
+            // Determine if price change is significant enough to show
+            const showPriceChange = Math.abs(parseFloat(market.priceChange)) > 1;
 
             return `
-                <div class="market-card ${unusualClass}" style="animation-delay: ${market.animationDelay || 0}s; cursor: pointer;" onclick="openMarketModal(${JSON.stringify(market).replace(/"/g, '&quot;')})">
+                <div class="market-card ${unusualClass}" style="animation-delay: ${market.animationDelay || 0}s;">
                     <div class="market-header">
                         <div class="market-meta">
                             <div style="display: flex; gap: 8px; align-items: center;">
-                                ${market.unusual ? '<span class="unusual-badge">⚡ HOT</span>' : ''}
+                                ${market.unusual ? '<span class="unusual-badge">🔥 TRENDING</span>' : ''}
                                 ${market.category && market.category !== 'Other' ? `<span class="category-badge">${market.category}</span>` : ''}
                             </div>
                         </div>
@@ -911,28 +967,41 @@
                     </div>
                     <div class="market-body-new">
                         <div class="price-buttons">
-                            <div class="price-btn yes-btn">
-                                <div class="btn-label">YES</div>
+                            <a href="${kalshiUrl}" target="_blank" class="price-btn yes-btn" onclick="event.stopPropagation();">
+                                <div class="btn-label">BET YES</div>
                                 <div class="btn-price">${yesPercent}%</div>
-                                <div class="btn-subtext">${yesPrice}¢</div>
-                            </div>
-                            <div class="price-btn no-btn">
-                                <div class="btn-label">NO</div>
+                                <div class="btn-subtext">$${yesPriceDollars}</div>
+                            </a>
+                            <a href="${kalshiUrl}" target="_blank" class="price-btn no-btn" onclick="event.stopPropagation();">
+                                <div class="btn-label">BET NO</div>
                                 <div class="btn-price">${noPercent}%</div>
-                                <div class="btn-subtext">${noPrice}¢</div>
-                            </div>
+                                <div class="btn-subtext">$${noPriceDollars}</div>
+                            </a>
                         </div>
                         <div class="market-stats-new">
                             <div class="stat-item-new">
-                                <div class="stat-label-new">Volume</div>
+                                <div class="stat-label-new">24H Volume</div>
                                 <div class="stat-value-new">${formatNumber(market.volume24h)}</div>
                             </div>
-                            ${Math.abs(parseFloat(market.priceChange)) > 1 ? `
+                            ${showPriceChange ? `
                             <div class="stat-item-new">
-                                <div class="stat-label-new">24h</div>
-                                <div class="stat-value-new ${priceChangeClass}">${priceChangeSymbol}${Math.abs(market.priceChange)}%</div>
+                                <div class="stat-label-new">24H Change</div>
+                                <div class="stat-value-new ${priceChangeClass}">${priceChangeSymbol} ${Math.abs(market.priceChange)}%</div>
                             </div>
-                            ` : ''}
+                            ` : `
+                            <div class="stat-item-new">
+                                <div class="stat-label-new">Trades</div>
+                                <div class="stat-value-new">${market.trades24h.toLocaleString()}</div>
+                            </div>
+                            `}
+                        </div>
+                        <div class="market-actions">
+                            <button onclick="openMarketModal(${JSON.stringify(market).replace(/"/g, '&quot;')}); event.stopPropagation();" class="action-btn secondary">
+                                📊 View Details
+                            </button>
+                            <a href="${kalshiUrl}" target="_blank" class="action-btn primary" onclick="event.stopPropagation();">
+                                Trade on Kalshi →
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -961,10 +1030,30 @@
             const categories = [...new Set(allMarkets.map(m => m.category))].sort();
             const categoryFilter = document.getElementById('categoryFilter');
             
+            // Always include popular categories even if not in data
+            const popularCategories = ['Politics', 'Sports', 'Economics', 'Finance', 'Entertainment', 'Climate', 'Technology'];
+            const allCategories = [...new Set([...popularCategories, ...categories])].filter(c => c && c !== 'Other').sort();
+            
             categoryFilter.innerHTML = '<option value="all">All Categories</option>';
-            categories.forEach(cat => {
-                categoryFilter.innerHTML += `<option value="${cat}">${cat}</option>`;
+            
+            // Add categories with counts
+            allCategories.forEach(cat => {
+                const count = allMarkets.filter(m => m.category === cat).length;
+                if (count > 0) {
+                    categoryFilter.innerHTML += `<option value="${cat}">${cat} (${count})</option>`;
+                }
             });
+            
+            // Add "Other" at the end if it has markets
+            const otherCount = allMarkets.filter(m => m.category === 'Other').length;
+            if (otherCount > 0) {
+                categoryFilter.innerHTML += `<option value="Other">Other (${otherCount})</option>`;
+            }
+            
+            console.log('📊 Categories in filter:', allCategories);
+            console.log('📊 Markets by category:', 
+                allCategories.map(cat => `${cat}: ${allMarkets.filter(m => m.category === cat).length}`).join(', ')
+            );
         }
 
         // Render markets
