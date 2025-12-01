@@ -133,6 +133,8 @@ async function fetchKalshiMarkets() {
 // Fetch event categories
 async function fetchEventCategories() {
     try {
+        console.log('🔍 Starting to fetch event categories...');
+        
         let allEvents = [];
         let cursor = null;
         let pageCount = 0;
@@ -140,16 +142,20 @@ async function fetchEventCategories() {
 
         do {
             const path = `/trade-api/v2/events?limit=200${cursor ? `&cursor=${cursor}` : ''}`;
+            console.log(`📡 Fetching events: ${BASE_URL}${path}`);
+            
             const headers = signRequest('GET', path);
 
             if (!headers) {
+                console.log('❌ Could not sign request for events');
                 return {};
             }
 
             const response = await fetch(BASE_URL + path, { headers });
             
             if (!response.ok) {
-                console.error('Error fetching events:', response.status);
+                const errorText = await response.text();
+                console.error('❌ Error fetching events:', response.status, errorText);
                 return {};
             }
 
@@ -162,21 +168,39 @@ async function fetchEventCategories() {
             
             console.log(`📅 Fetched events page ${pageCount}: ${events.length} events (total: ${allEvents.length})`);
             
+            // Log sample event structure
+            if (events.length > 0 && pageCount === 1) {
+                console.log('📋 Sample event structure:', {
+                    event_ticker: events[0].event_ticker,
+                    category: events[0].category,
+                    title: events[0].title,
+                    available_fields: Object.keys(events[0])
+                });
+            }
+            
         } while (cursor && pageCount < maxPages);
 
         // Create event_ticker -> category mapping
         const categoryMap = {};
+        let categorizedCount = 0;
+        
         allEvents.forEach(event => {
             if (event.event_ticker && event.category) {
                 categoryMap[event.event_ticker] = event.category;
+                categorizedCount++;
             }
         });
 
-        console.log(`✅ Mapped ${Object.keys(categoryMap).length} events to categories`);
+        console.log(`✅ Created category map: ${categorizedCount}/${allEvents.length} events have categories`);
+        console.log('📊 Sample category mappings:', Object.entries(categoryMap).slice(0, 5));
+        
+        // Log unique categories found
+        const uniqueCategories = [...new Set(Object.values(categoryMap))];
+        console.log('📂 Unique categories found:', uniqueCategories);
         
         return categoryMap;
     } catch (error) {
-        console.error('Error fetching event categories:', error);
+        console.error('❌ Error in fetchEventCategories:', error);
         return {};
     }
 }
@@ -298,12 +322,28 @@ app.get('/api/markets', async (req, res) => {
             const volume = m.volume || m.liquidity || m.open_interest || 0;
             
             // Get previous price for change calculation
-            const prevPrice = m.previous_yes_bid_dollars ? parseFloat(m.previous_yes_bid_dollars) * 100 : parseFloat(currentPrice);
-            const priceChange = ((parseFloat(currentPrice) - prevPrice) / prevPrice * 100).toFixed(1);
+            let priceChange = 0;
+            if (m.previous_yes_bid_dollars && parseFloat(m.previous_yes_bid_dollars) > 0) {
+                const prevPrice = parseFloat(m.previous_yes_bid_dollars) * 100;
+                const currPrice = parseFloat(currentPrice);
+                if (prevPrice > 0 && currPrice > 0) {
+                    priceChange = ((currPrice - prevPrice) / prevPrice * 100).toFixed(1);
+                }
+            } else if (m.previous_yes_bid && m.previous_yes_bid > 0) {
+                const prevPrice = m.previous_yes_bid;
+                const currPrice = parseFloat(currentPrice);
+                if (prevPrice > 0 && currPrice > 0) {
+                    priceChange = ((currPrice - prevPrice) / prevPrice * 100).toFixed(1);
+                }
+            }
             
-            // Calculate volume change (we don't have historical, so use volume as indicator)
-            // Higher volume = more activity
-            const volumeScore = Math.min(100, (volume / 10000) * 100); // Normalize volume
+            // If priceChange is invalid (NaN, Infinity, etc), set to 0
+            if (!isFinite(priceChange) || isNaN(priceChange)) {
+                priceChange = 0;
+            }
+            
+            // Calculate volume score (normalize volume to 0-100)
+            const volumeScore = Math.min(100, (volume / 10000) * 100);
             
             // Category from event mapping
             const category = m.category || 'Other';
@@ -318,9 +358,9 @@ app.get('/api/markets', async (req, res) => {
                 volume24h: volume,
                 volumeChange: volumeScore.toFixed(0),
                 trades24h: m.open_interest || m.volume || 0,
-                unusual: volume > 50000 || Math.abs(priceChange) > 5, // Unusual if high volume or big price move
-                hotnessScore: Math.min(100, Math.floor(volumeScore + Math.abs(priceChange) * 5)),
-                rawVolume: volume // Keep for sorting
+                unusual: volume > 50000 || Math.abs(parseFloat(priceChange)) > 5,
+                hotnessScore: Math.min(100, Math.floor(volumeScore + Math.abs(parseFloat(priceChange)) * 5)),
+                rawVolume: volume
             };
         });
 
@@ -473,3 +513,4 @@ app.listen(PORT, () => {
         console.log(`   KALSHI_PRIVATE_KEY = your-private-key\n`);
     }
 });
+
