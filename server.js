@@ -72,6 +72,12 @@ async function fetchKalshiMarkets() {
     }
 
     const data = await response.json();
+    
+    // Log sample market data to see structure
+    if (data.markets && data.markets.length > 0) {
+        console.log('📊 Sample Kalshi market data:', JSON.stringify(data.markets[0], null, 2));
+    }
+    
     return data.markets || [];
 }
 
@@ -166,16 +172,29 @@ app.get('/api/markets', async (req, res) => {
             const priceChange = (Math.random() * 30 - 15).toFixed(1);
             const isUnusual = Math.abs(volumeChange) > 100 || Math.abs(priceChange) > 10;
 
+            // Handle Kalshi price format (they might be in dollars 0-1 or cents 0-100)
+            let currentPrice = m.last_price || m.yes_price || 0;
+            
+            // If price is between 0-1, convert to cents (0-100)
+            if (currentPrice > 0 && currentPrice <= 1) {
+                currentPrice = (currentPrice * 100).toFixed(1);
+            } else if (currentPrice > 100) {
+                // If already in cents but too high, cap it
+                currentPrice = Math.min(currentPrice, 100).toFixed(1);
+            } else {
+                currentPrice = currentPrice.toFixed(1);
+            }
+
             return {
-                id: m.ticker,
+                id: m.ticker || `MARKET-${Math.random().toString(36).substr(2, 9)}`,
                 platform: 'Kalshi',
-                title: m.title,
-                category: m.category,
-                currentPrice: (m.last_price * 100).toFixed(1),
+                title: m.title || m.ticker || 'Unknown Market',
+                category: m.category || m.series_category || 'Other',
+                currentPrice: currentPrice,
                 priceChange: priceChange,
-                volume24h: m.volume_24h,
+                volume24h: m.volume_24h || m.volume || 0,
                 volumeChange: volumeChange,
-                trades24h: m.open_interest,
+                trades24h: m.open_interest || m.volume || 0,
                 unusual: isUnusual,
                 hotnessScore: Math.min(100, Math.floor((Math.abs(volumeChange) / 2) + (Math.abs(priceChange) * 3)))
             };
