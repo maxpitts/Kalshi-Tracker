@@ -101,13 +101,25 @@ async function fetchKalshiMarkets() {
             return { ...market, category };
         });
 
+        // Debug: Check category mapping
+        const categorized = allMarkets.filter(m => m.category !== 'Other').length;
+        console.log(`✅ Categorized ${categorized}/${allMarkets.length} markets`);
+        
+        if (categorized === 0) {
+            console.log('⚠️  WARNING: No categories mapped!');
+            console.log('Sample market event_ticker:', allMarkets[0]?.event_ticker);
+            console.log('Sample event ticker from map:', Object.keys(eventCategories)[0]);
+            console.log('Total event categories:', Object.keys(eventCategories).length);
+        }
+
         // Log sample market with category
         if (allMarkets.length > 0) {
-            console.log('📊 Sample market with category:', {
-                ticker: allMarkets[0].ticker,
-                title: allMarkets[0].title,
-                event_ticker: allMarkets[0].event_ticker,
-                category: allMarkets[0].category
+            const sampleWithCategory = allMarkets.find(m => m.category !== 'Other') || allMarkets[0];
+            console.log('📊 Sample market:', {
+                ticker: sampleWithCategory.ticker,
+                title: sampleWithCategory.title?.substring(0, 50),
+                event_ticker: sampleWithCategory.event_ticker,
+                category: sampleWithCategory.category
             });
         }
 
@@ -217,6 +229,14 @@ app.get('/api/kalshi/markets', async (req, res) => {
                 console.log('📊 Fetching real Kalshi markets...');
                 markets = await fetchKalshiMarkets();
                 console.log(`✅ Fetched ${markets.length} real Kalshi markets`);
+                
+                // Log category distribution
+                const categoryCount = {};
+                markets.forEach(m => {
+                    categoryCount[m.category] = (categoryCount[m.category] || 0) + 1;
+                });
+                console.log('📊 Category distribution:', categoryCount);
+                
             } catch (error) {
                 console.error('❌ Error fetching real markets:', error.message);
                 console.log('⚠️  Falling back to demo mode');
@@ -259,49 +279,67 @@ app.get('/api/markets', async (req, res) => {
             // Only include markets with actual trading activity
             const hasPrice = m.last_price > 0 || parseFloat(m.last_price_dollars) > 0;
             const hasVolume = m.volume > 0 || m.liquidity > 0 || m.open_interest > 0;
-            return hasPrice || hasVolume; // Include if it has either price or volume
+            return hasPrice || hasVolume;
         });
 
         console.log(`📊 Filtered ${data.markets.length} markets → ${activeMarkets.length} active markets`);
 
+        // Transform and calculate metrics
         const transformedMarkets = activeMarkets.map(m => {
-                const volumeChange = (Math.random() * 350 - 20).toFixed(0);
-                const priceChange = (Math.random() * 30 - 15).toFixed(1);
-                const isUnusual = Math.abs(volumeChange) > 100 || Math.abs(priceChange) > 10;
+            // Use last_price_dollars and convert to cents
+            let currentPrice = 0;
+            if (m.last_price_dollars) {
+                currentPrice = (parseFloat(m.last_price_dollars) * 100).toFixed(1);
+            } else if (m.last_price > 0) {
+                currentPrice = m.last_price.toFixed(1);
+            }
 
-                // Use last_price_dollars and convert to cents
-                let currentPrice = 0;
-                if (m.last_price_dollars) {
-                    currentPrice = (parseFloat(m.last_price_dollars) * 100).toFixed(1);
-                } else if (m.last_price > 0) {
-                    currentPrice = m.last_price.toFixed(1);
-                }
+            // Get volume - use actual volume
+            const volume = m.volume || m.liquidity || m.open_interest || 0;
+            
+            // Get previous price for change calculation
+            const prevPrice = m.previous_yes_bid_dollars ? parseFloat(m.previous_yes_bid_dollars) * 100 : parseFloat(currentPrice);
+            const priceChange = ((parseFloat(currentPrice) - prevPrice) / prevPrice * 100).toFixed(1);
+            
+            // Calculate volume change (we don't have historical, so use volume as indicator)
+            // Higher volume = more activity
+            const volumeScore = Math.min(100, (volume / 10000) * 100); // Normalize volume
+            
+            // Category from event mapping
+            const category = m.category || 'Other';
 
-                // Get volume - try multiple fields
-                const volume = m.volume || m.liquidity || m.open_interest || 0;
-                
-                // Category now comes from event mapping (set during fetchKalshiMarkets)
-                const category = m.category || 'Other';
+            return {
+                id: m.ticker || `MARKET-${Math.random().toString(36).substr(2, 9)}`,
+                platform: 'Kalshi',
+                title: m.title || m.subtitle || m.ticker || 'Unknown Market',
+                category: category,
+                currentPrice: currentPrice,
+                priceChange: priceChange,
+                volume24h: volume,
+                volumeChange: volumeScore.toFixed(0),
+                trades24h: m.open_interest || m.volume || 0,
+                unusual: volume > 50000 || Math.abs(priceChange) > 5, // Unusual if high volume or big price move
+                hotnessScore: Math.min(100, Math.floor(volumeScore + Math.abs(priceChange) * 5)),
+                rawVolume: volume // Keep for sorting
+            };
+        });
 
-                return {
-                    id: m.ticker || `MARKET-${Math.random().toString(36).substr(2, 9)}`,
-                    platform: 'Kalshi',
-                    title: m.title || m.subtitle || m.ticker || 'Unknown Market',
-                    category: category,
-                    currentPrice: currentPrice,
-                    priceChange: priceChange,
-                    volume24h: volume,
-                    volumeChange: volumeChange,
-                    trades24h: m.open_interest || m.volume || 0,
-                    unusual: isUnusual,
-                    hotnessScore: Math.min(100, Math.floor((Math.abs(volumeChange) / 2) + (Math.abs(priceChange) * 3)))
-                };
-            });
+        // Sort by hotness and filter to top markets
+        const sortedMarkets = transformedMarkets.sort((a, b) => b.hotnessScore - a.hotnessScore);
+        
+        // Only show:
+        // 1. Top 100 by hotness score, OR
+        // 2. Markets marked as unusual (high volume or big price change)
+        const filteredMarkets = sortedMarkets.filter((m, index) => {
+            return index < 100 || m.unusual;
+        });
+
+        console.log(`🔥 Showing ${filteredMarkets.length} trending/unusual markets (from ${transformedMarkets.length} active)`);
 
         res.json({
             success: true,
             demo: data.demo,
-            markets: transformedMarkets,
+            markets: filteredMarkets,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
