@@ -237,6 +237,106 @@ app.get('/api/markets', async (req, res) => {
     }
 });
 
+// Fetch market details (trades, candlesticks, orderbook)
+async function fetchMarketDetails(ticker) {
+    try {
+        // Get recent trades
+        const tradesPath = `/trade-api/v2/markets/trades?ticker=${ticker}&limit=50`;
+        const tradesHeaders = signRequest('GET', tradesPath);
+        
+        // Get candlestick data (price history)
+        const candlePath = `/trade-api/v2/markets/${ticker}/candlesticks?period_interval=1h`;
+        const candleHeaders = signRequest('GET', candlePath);
+
+        const [tradesResponse, candleResponse] = await Promise.all([
+            fetch(BASE_URL + tradesPath, { headers: tradesHeaders }),
+            fetch(BASE_URL + candlePath, { headers: candleHeaders })
+        ]);
+
+        const trades = tradesResponse.ok ? await tradesResponse.json() : { trades: [] };
+        const candles = candleResponse.ok ? await candleResponse.json() : { candlesticks: [] };
+
+        return {
+            trades: trades.trades || [],
+            candlesticks: candles.candlesticks || []
+        };
+    } catch (error) {
+        console.error('Error fetching market details:', error);
+        return { trades: [], candlesticks: [] };
+    }
+}
+
+// Endpoint: Get market details
+app.get('/api/market/:ticker/details', async (req, res) => {
+    try {
+        const { ticker } = req.params;
+        
+        if (!KALSHI_PRIVATE_KEY || !KALSHI_API_KEY_ID) {
+            // Demo data for when no API keys
+            return res.json({
+                success: true,
+                demo: true,
+                trades: generateDemoTrades(),
+                candlesticks: generateDemoCandlesticks()
+            });
+        }
+
+        const details = await fetchMarketDetails(ticker);
+        res.json({
+            success: true,
+            demo: false,
+            ...details
+        });
+    } catch (error) {
+        console.error('Error in market details:', error);
+        res.json({
+            success: false,
+            trades: [],
+            candlesticks: []
+        });
+    }
+});
+
+// Generate demo trades
+function generateDemoTrades() {
+    const trades = [];
+    const now = Date.now();
+    for (let i = 0; i < 20; i++) {
+        const side = Math.random() > 0.5 ? 'yes' : 'no';
+        const price = (Math.random() * 0.6 + 0.2).toFixed(4);
+        trades.push({
+            trade_id: `demo-${i}`,
+            ticker: 'DEMO',
+            yes_price_dollars: price,
+            no_price_dollars: (1 - parseFloat(price)).toFixed(4),
+            count: Math.floor(Math.random() * 100) + 1,
+            taker_side: side,
+            created_time: new Date(now - i * 60000 * 5).toISOString()
+        });
+    }
+    return trades;
+}
+
+// Generate demo candlesticks
+function generateDemoCandlesticks() {
+    const candles = [];
+    const now = Date.now();
+    let price = 0.5;
+    for (let i = 24; i >= 0; i--) {
+        const change = (Math.random() - 0.5) * 0.05;
+        price = Math.max(0.1, Math.min(0.9, price + change));
+        candles.push({
+            start_time: new Date(now - i * 3600000).toISOString(),
+            open: (price - 0.02).toFixed(4),
+            high: (price + 0.03).toFixed(4),
+            low: (price - 0.03).toFixed(4),
+            close: price.toFixed(4),
+            volume: Math.floor(Math.random() * 1000)
+        });
+    }
+    return candles;
+}
+
 // Health check
 app.get('/health', (req, res) => {
     const hasKeys = !!(KALSHI_PRIVATE_KEY && KALSHI_API_KEY_ID);
