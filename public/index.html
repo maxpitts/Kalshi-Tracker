@@ -581,6 +581,19 @@
         let allMarkets = [];
         let filteredMarkets = [];
 
+        // Format numbers nicely ($1.7M, $100K, etc.)
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return '$' + (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 100000) {
+                return '$' + (num / 1000).toFixed(0) + 'K';
+            } else if (num >= 1000) {
+                return '$' + (num / 1000).toFixed(1) + 'K';
+            } else {
+                return '$' + num.toFixed(0);
+            }
+        }
+
         // Fetch markets from backend API
         async function fetchMarkets() {
             try {
@@ -638,7 +651,7 @@
                             <div class="metric">
                                 <div class="metric-label">24h Volume</div>
                                 <div class="metric-value" style="color: var(--accent-blue);">
-                                    $${(market.volume24h / 1000).toFixed(0)}K
+                                    ${formatNumber(market.volume24h)}
                                 </div>
                                 <div style="font-size: 12px; color: var(--accent-green); margin-top: 3px;">
                                     ${parseFloat(market.volumeChange) >= 0 ? '+' : ''}${market.volumeChange}%
@@ -672,7 +685,7 @@
 
             document.getElementById('totalMarkets').textContent = filteredMarkets.length;
             document.getElementById('unusualCount').textContent = unusualCount;
-            document.getElementById('totalVolume').textContent = `$${(totalVolume / 1000000).toFixed(1)}M`;
+            document.getElementById('totalVolume').textContent = formatNumber(totalVolume);
             document.getElementById('marketsUp').textContent = marketsUp;
             document.getElementById('marketsDown').textContent = marketsDown;
 
