@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UNUSUAL MARKETS - Prediction Market Terminal</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Mono:wght@400;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         :root {
             --terminal-bg: #0a0e14;
@@ -498,6 +499,150 @@
                 align-items: stretch;
             }
         }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 14, 20, 0.95);
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-content {
+            background: var(--terminal-surface);
+            margin: 3% auto;
+            padding: 30px;
+            border: 2px solid var(--accent-blue);
+            width: 90%;
+            max-width: 1200px;
+            border-radius: 8px;
+            box-shadow: 0 0 50px var(--glow-blue);
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .modal-close {
+            color: var(--text-secondary);
+            float: right;
+            font-size: 35px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 20px;
+        }
+
+        .modal-close:hover {
+            color: var(--accent-red);
+        }
+
+        .modal-title {
+            color: var(--text-primary);
+            font-family: 'Syne', sans-serif;
+            font-size: 24px;
+            margin-bottom: 20px;
+            clear: both;
+        }
+
+        .modal-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--terminal-border);
+        }
+
+        .tab-button {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 12px 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-button:hover {
+            color: var(--accent-blue);
+        }
+
+        .tab-button.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 20px 0;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        #priceChart {
+            width: 100% !important;
+            height: 400px !important;
+        }
+
+        .trades-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .trade-item {
+            background: var(--terminal-bg);
+            padding: 12px 15px;
+            border-radius: 4px;
+            border-left: 3px solid;
+            display: grid;
+            grid-template-columns: 100px 1fr 120px 100px 150px;
+            gap: 15px;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .trade-item.buy {
+            border-left-color: var(--accent-green);
+        }
+
+        .trade-item.sell {
+            border-left-color: var(--accent-red);
+        }
+
+        .trade-side {
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .trade-side.buy {
+            color: var(--accent-green);
+        }
+
+        .trade-side.sell {
+            color: var(--accent-red);
+        }
+
+        .trade-price {
+            color: var(--accent-blue);
+            font-weight: 600;
+        }
+
+        .trade-size {
+            color: var(--text-primary);
+        }
+
+        .trade-time {
+            color: var(--text-dim);
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
@@ -574,6 +719,27 @@
         </div>
     </div>
 
+    <!-- Market Details Modal -->
+    <div id="marketModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2 id="modalTitle" class="modal-title"></h2>
+            
+            <div class="modal-tabs">
+                <button class="tab-button active" data-tab="chart">📊 Price Chart</button>
+                <button class="tab-button" data-tab="trades">💰 Order Flow</button>
+            </div>
+
+            <div class="tab-content active" id="chart-tab">
+                <canvas id="priceChart"></canvas>
+            </div>
+
+            <div class="tab-content" id="trades-tab">
+                <div id="tradesContainer" class="trades-list"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Configuration - Change this if deploying to different URL
         const API_URL = window.location.origin; // Automatically uses same domain
@@ -625,7 +791,7 @@
             const unusualClass = market.unusual ? 'unusual' : '';
 
             return `
-                <div class="market-card ${unusualClass}" style="animation-delay: ${market.animationDelay || 0}s">
+                <div class="market-card ${unusualClass}" style="animation-delay: ${market.animationDelay || 0}s; cursor: pointer;" onclick="openMarketModal(${JSON.stringify(market).replace(/"/g, '&quot;')})">
                     <div class="market-header">
                         <div class="market-meta">
                             <div style="display: flex; gap: 8px;">
@@ -793,6 +959,168 @@
 
         // Start when page loads
         window.addEventListener('DOMContentLoaded', init);
+
+        // Modal functionality
+        let priceChart = null;
+
+        async function openMarketModal(market) {
+            const modal = document.getElementById('marketModal');
+            document.getElementById('modalTitle').textContent = market.title;
+            
+            // Show modal
+            modal.style.display = 'block';
+
+            // Fetch market details
+            try {
+                const response = await fetch(`${API_URL}/api/market/${market.id}/details`);
+                const data = await response.json();
+
+                // Update price chart
+                updatePriceChart(data.candlesticks);
+                
+                // Update trades list
+                updateTradesList(data.trades);
+            } catch (error) {
+                console.error('Error fetching market details:', error);
+            }
+        }
+
+        function updatePriceChart(candlesticks) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            // Destroy existing chart if any
+            if (priceChart) {
+                priceChart.destroy();
+            }
+
+            const labels = candlesticks.map(c => {
+                const date = new Date(c.start_time);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            });
+
+            const prices = candlesticks.map(c => parseFloat(c.close) * 100);
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Price (¢)',
+                        data: prices,
+                        borderColor: '#00d4ff',
+                        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#e6e6e6',
+                                font: {
+                                    family: 'JetBrains Mono'
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: '#8a8a8a',
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: {
+                                    family: 'JetBrains Mono',
+                                    size: 10
+                                }
+                            },
+                            grid: {
+                                color: '#1f2430'
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                color: '#8a8a8a',
+                                font: {
+                                    family: 'JetBrains Mono'
+                                },
+                                callback: function(value) {
+                                    return value + '¢';
+                                }
+                            },
+                            grid: {
+                                color: '#1f2430'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateTradesList(trades) {
+            const container = document.getElementById('tradesContainer');
+            
+            if (trades.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 40px;">No recent trades</div>';
+                return;
+            }
+
+            container.innerHTML = trades.map(trade => {
+                const side = trade.taker_side === 'yes' ? 'buy' : 'sell';
+                const price = (parseFloat(trade.yes_price_dollars) * 100).toFixed(1);
+                const time = new Date(trade.created_time).toLocaleString();
+
+                return `
+                    <div class="trade-item ${side}">
+                        <div class="trade-side ${side}">${side.toUpperCase()}</div>
+                        <div class="trade-ticker">${trade.ticker}</div>
+                        <div class="trade-price">${price}¢</div>
+                        <div class="trade-size">${trade.count} contracts</div>
+                        <div class="trade-time">${time}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Modal tab switching
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const tab = button.dataset.tab;
+                
+                // Update buttons
+                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+                
+                // Update content
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById(tab + '-tab').classList.add('active');
+            });
+        });
+
+        // Close modal
+        document.querySelector('.modal-close').addEventListener('click', () => {
+            document.getElementById('marketModal').style.display = 'none';
+            if (priceChart) {
+                priceChart.destroy();
+                priceChart = null;
+            }
+        });
+
+        // Close modal when clicking outside
+        window.addEventListener('click', (event) => {
+            const modal = document.getElementById('marketModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+                if (priceChart) {
+                    priceChart.destroy();
+                    priceChart = null;
+                }
+            }
+        });
     </script>
 </body>
 </html>
