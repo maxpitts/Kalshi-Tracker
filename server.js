@@ -30,9 +30,12 @@ async function getKalshiToken() {
     }
 
     try {
-        const response = await fetch('https://api.elections.kalshi.com/trade-api/v2/login', {
+        const response = await fetch('https://trading-api.kalshi.com/trade-api/v2/login', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify({
                 email: KALSHI_EMAIL,
                 password: KALSHI_PASSWORD
@@ -40,15 +43,18 @@ async function getKalshiToken() {
         });
 
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Kalshi login failed:', response.status, errorText);
             throw new Error(`Kalshi login failed: ${response.status}`);
         }
 
         const data = await response.json();
         kalshiToken = data.token;
         
-        // Token typically valid for 24 hours, cache for 23 hours to be safe
-        tokenExpiry = Date.now() + (23 * 60 * 60 * 1000);
+        // Token valid for 30 minutes, cache for 25 minutes
+        tokenExpiry = Date.now() + (25 * 60 * 1000);
         
+        console.log('✅ Kalshi authentication successful');
         return kalshiToken;
     } catch (error) {
         console.error('Kalshi authentication error:', error);
@@ -69,9 +75,10 @@ app.get('/api/kalshi/markets', async (req, res) => {
 
         const token = await getKalshiToken();
         
-        const response = await fetch('https://api.elections.kalshi.com/trade-api/v2/markets?limit=100&status=active', {
+        const response = await fetch('https://trading-api.kalshi.com/trade-api/v2/markets?limit=100&status=active', {
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
             }
         });
 
