@@ -75,7 +75,9 @@ async function fetchKalshiMarkets() {
     
     // Log sample market data to see structure
     if (data.markets && data.markets.length > 0) {
-        console.log('📊 Sample Kalshi market data:', JSON.stringify(data.markets[0], null, 2));
+        console.log('📊 Sample Kalshi market data:');
+        console.log(JSON.stringify(data.markets[0], null, 2));
+        console.log('📋 Available fields:', Object.keys(data.markets[0]));
     }
     
     return data.markets || [];
@@ -166,39 +168,62 @@ app.get('/api/markets', async (req, res) => {
             return res.json({ success: false, markets: [] });
         }
 
-        // Transform markets
-        const transformedMarkets = data.markets.map(m => {
-            const volumeChange = (Math.random() * 350 - 20).toFixed(0);
-            const priceChange = (Math.random() * 30 - 15).toFixed(1);
-            const isUnusual = Math.abs(volumeChange) > 100 || Math.abs(priceChange) > 10;
-
-            // Handle Kalshi price format (they might be in dollars 0-1 or cents 0-100)
-            let currentPrice = m.last_price || m.yes_price || 0;
-            
-            // If price is between 0-1, convert to cents (0-100)
-            if (currentPrice > 0 && currentPrice <= 1) {
-                currentPrice = (currentPrice * 100).toFixed(1);
-            } else if (currentPrice > 100) {
-                // If already in cents but too high, cap it
-                currentPrice = Math.min(currentPrice, 100).toFixed(1);
-            } else {
-                currentPrice = currentPrice.toFixed(1);
-            }
-
-            return {
-                id: m.ticker || `MARKET-${Math.random().toString(36).substr(2, 9)}`,
-                platform: 'Kalshi',
-                title: m.title || m.ticker || 'Unknown Market',
-                category: m.category || m.series_category || 'Other',
-                currentPrice: currentPrice,
-                priceChange: priceChange,
-                volume24h: m.volume_24h || m.volume || 0,
-                volumeChange: volumeChange,
-                trades24h: m.open_interest || m.volume || 0,
-                unusual: isUnusual,
-                hotnessScore: Math.min(100, Math.floor((Math.abs(volumeChange) / 2) + (Math.abs(priceChange) * 3)))
-            };
+        // Transform markets and filter out inactive ones
+        const activeMarkets = data.markets.filter(m => {
+            // Only include markets with actual trading activity
+            const hasPrice = m.last_price > 0 || parseFloat(m.last_price_dollars) > 0;
+            const hasVolume = m.volume > 0 || m.liquidity > 0 || m.open_interest > 0;
+            return hasPrice || hasVolume; // Include if it has either price or volume
         });
+
+        console.log(`📊 Filtered ${data.markets.length} markets → ${activeMarkets.length} active markets`);
+
+        const transformedMarkets = activeMarkets.map(m => {
+                const volumeChange = (Math.random() * 350 - 20).toFixed(0);
+                const priceChange = (Math.random() * 30 - 15).toFixed(1);
+                const isUnusual = Math.abs(volumeChange) > 100 || Math.abs(priceChange) > 10;
+
+                // Use last_price_dollars and convert to cents
+                let currentPrice = 0;
+                if (m.last_price_dollars) {
+                    currentPrice = (parseFloat(m.last_price_dollars) * 100).toFixed(1);
+                } else if (m.last_price > 0) {
+                    currentPrice = m.last_price.toFixed(1);
+                }
+
+                // Get volume - try multiple fields
+                const volume = m.volume || m.liquidity || m.open_interest || 0;
+                
+                // Get category - extract from event_ticker if category is empty
+                let category = m.category || 'Other';
+                if (!category || category === '') {
+                    // Try to extract from event_ticker (e.g., "KXNFLRECSY..." might indicate NFL)
+                    const ticker = m.event_ticker || m.ticker || '';
+                    if (ticker.includes('NFL') || ticker.includes('NBA') || ticker.includes('SPORT')) {
+                        category = 'Sports';
+                    } else if (ticker.includes('PRES') || ticker.includes('POL')) {
+                        category = 'Politics';
+                    } else if (ticker.includes('ECON') || ticker.includes('FED')) {
+                        category = 'Economics';
+                    } else {
+                        category = 'Other';
+                    }
+                }
+
+                return {
+                    id: m.ticker || `MARKET-${Math.random().toString(36).substr(2, 9)}`,
+                    platform: 'Kalshi',
+                    title: m.title || m.subtitle || m.ticker || 'Unknown Market',
+                    category: category,
+                    currentPrice: currentPrice,
+                    priceChange: priceChange,
+                    volume24h: volume,
+                    volumeChange: volumeChange,
+                    trades24h: m.open_interest || m.volume || 0,
+                    unusual: isUnusual,
+                    hotnessScore: Math.min(100, Math.floor((Math.abs(volumeChange) / 2) + (Math.abs(priceChange) * 3)))
+                };
+            });
 
         res.json({
             success: true,
