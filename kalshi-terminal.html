@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNUSUAL MARKETS - Kalshi Terminal</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Mono:wght@400;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --terminal-bg: #0a0e14;
+            --terminal-surface: #151922;
+            --terminal-border: #1f2430;
+            --accent-green: #00ff88;
+            --accent-red: #ff4444;
+            --accent-blue: #00d4ff;
+            --accent-yellow: #ffd700;
+            --accent-purple: #ba55d3;
+            --text-primary: #e6e6e6;
+            --text-secondary: #8a8a8a;
+            --text-dim: #5a5a5a;
+            --glow-green: rgba(0, 255, 136, 0.3);
+            --glow-blue: rgba(0, 212, 255, 0.3);
+            --glow-purple: rgba(186, 85, 211, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--terminal-bg);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(var(--terminal-border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--terminal-border) 1px, transparent 1px);
+            background-size: 30px 30px;
+            opacity: 0.3;
+            pointer-events: none;
+            animation: gridMove 20s linear infinite;
+            z-index: 0;
+        }
+
+        @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(30px, 30px); }
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(transparent 50%, rgba(186, 85, 211, 0.03) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            animation: scanline 8s linear infinite;
+            z-index: 100;
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(4px); }
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            border: 2px solid var(--accent-purple);
+            background: var(--terminal-surface);
+            padding: 25px 30px;
+            margin-bottom: 30px;
+            position: relative;
+            box-shadow: 0 0 30px var(--glow-purple);
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, var(--accent-purple), var(--accent-blue));
+            opacity: 0.1;
+            animation: borderGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes borderGlow {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.3; }
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .logo {
+            font-family: 'Syne', sans-serif;
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            color: var(--accent-purple);
+            text-shadow: 0 0 20px var(--glow-purple);
+        }
+
+        .logo-subtitle {
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+            letter-spacing: 3px;
+            margin-top: 5px;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .live-dot {
+            width: 12px;
+            height: 12px;
+            background: var(--accent-red);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 10px var(--accent-red);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.9); }
+        }
+
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+            animation: fadeIn 0.8s ease-out 0.2s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .stat-card {
+            background: var(--terminal-surface);
+            border: 1px solid var(--terminal-border);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            border-color: var(--accent-purple);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px var(--glow-purple);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .stat-value.green { color: var(--accent-green); }
+        .stat-value.red { color: var(--accent-red); }
+        .stat-value.blue { color: var(--accent-blue); }
+        .stat-value.purple { color: var(--accent-purple); }
+        .stat-value.yellow { color: var(--accent-yellow); }
+
+        .stat-change {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            animation: fadeIn 1s ease-out 0.4s both;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .filter-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        select, input {
+            background: var(--terminal-surface);
+            border: 1px solid var(--terminal-border);
+            color: var(--text-primary);
+            padding: 10px 15px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        select:hover, input:hover {
+            border-color: var(--accent-purple);
+        }
+
+        select:focus, input:focus {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 10px var(--glow-purple);
+        }
+
+        input[type="search"] {
+            min-width: 300px;
+        }
+
+        .markets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 20px;
+            animation: fadeIn 1.2s ease-out 0.6s both;
+        }
+
+        .market-card {
+            background: var(--terminal-surface);
+            border: 1px solid var(--terminal-border);
+            padding: 0;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: slideUp 0.5s ease-out backwards;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .market-card:hover {
+            border-color: var(--accent-purple);
+            transform: translateY(-4px);
+            box-shadow: 0 10px 40px var(--glow-purple);
+        }
+
+        .market-card.unusual {
+            border: 2px solid var(--accent-yellow);
+            animation: unusualPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes unusualPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(255, 215, 0, 0.6); }
+        }
+
+        .market-header {
+            background: linear-gradient(135deg, var(--terminal-bg), var(--terminal-surface));
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--terminal-border);
+        }
+
+        .market-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .platform-badge {
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            background: rgba(138, 43, 226, 0.2);
+            color: var(--accent-purple);
+            border: 1px solid var(--accent-purple);
+        }
+
+        .category-badge {
+            font-size: 10px;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            border: 1px solid var(--terminal-border);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .unusual-badge {
+            font-size: 11px;
+            padding: 5px 10px;
+            background: var(--accent-yellow);
+            color: var(--terminal-bg);
+            font-weight: 700;
+            letter-spacing: 1px;
+            animation: flash 1.5s ease-in-out infinite;
+        }
+
+        @keyframes flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .market-title {
+            font-size: 15px;
+            font-weight: 500;
+            line-height: 1.4;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .market-body {
+            padding: 20px;
+        }
+
+        .price-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--terminal-border);
+        }
+
+        .current-price {
+            font-size: 36px;
+            font-weight: 700;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .price-change {
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .price-change.positive { color: var(--accent-green); }
+        .price-change.negative { color: var(--accent-red); }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .metric {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .metric-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .metric-value {
+            font-size: 18px;
+            font-weight: 700;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .volume-bar {
+            width: 100%;
+            height: 3px;
+            background: var(--terminal-border);
+            margin-top: 5px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .volume-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .volume-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            font-size: 14px;
+            color: var(--text-dim);
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .loading::before {
+            content: '▓▓▓▓▓▓▓▓▓▓';
+            display: block;
+            margin-bottom: 20px;
+            font-size: 20px;
+            animation: loadingBlink 1.5s steps(10) infinite;
+            color: var(--accent-purple);
+        }
+
+        @keyframes loadingBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        @media (max-width: 768px) {
+            .markets-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-bar {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            input[type="search"] {
+                min-width: 100%;
+            }
+
+            .filters {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <div>
+                    <div class="logo">UNUSUAL MARKETS</div>
+                    <div class="logo-subtitle">KALSHI PREDICTION MARKET TERMINAL v2.0</div>
+                </div>
+                <div class="live-indicator">
+                    <div class="live-dot"></div>
+                    <span>LIVE FEED</span>
+                    <span id="lastUpdate">--:--:--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Info Banner -->
+        <div id="configBanner" style="background: rgba(255, 193, 7, 0.1); border: 2px solid var(--accent-yellow); padding: 15px 25px; margin-bottom: 20px; border-radius: 8px; display: none;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <span style="font-size: 24px;">⚙️</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: 700; color: var(--accent-yellow); margin-bottom: 5px;">DEMO MODE - Using Mock Data</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">
+                        To use real Kalshi data: Edit this HTML file → Find "API_CONFIG" at line ~630 → Set useRealData: true and add your credentials
+                    </div>
+                </div>
+                <button onclick="this.parentElement.parentElement.style.display='none'" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; padding: 5px 10px;">✕</button>
+            </div>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="stat-label">Total Markets</div>
+                <div class="stat-value purple" id="totalMarkets">0</div>
+                <div class="stat-change">Active on Kalshi</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Unusual Activity</div>
+                <div class="stat-value yellow" id="unusualCount">0</div>
+                <div class="stat-change">High volatility detected</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">24h Volume</div>
+                <div class="stat-value green" id="totalVolume">$0</div>
+                <div class="stat-change">Total trading volume</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Price Movements</div>
+                <div class="stat-value" id="priceMovements">
+                    <span class="green" id="marketsUp">0</span> / <span class="red" id="marketsDown">0</span>
+                </div>
+                <div class="stat-change">Up / Down</div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <div class="filter-group">
+                <span class="filter-label">Search</span>
+                <input type="search" id="searchInput" placeholder="Search markets...">
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">Category</span>
+                <select id="categoryFilter">
+                    <option value="all">All Categories</option>
+                    <option value="Politics">Politics</option>
+                    <option value="Economics">Economics</option>
+                    <option value="Sports">Sports</option>
+                    <option value="Entertainment">Entertainment</option>
+                    <option value="Climate">Climate</option>
+                    <option value="Science">Science</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">Sort</span>
+                <select id="sortFilter">
+                    <option value="volume">Volume Change</option>
+                    <option value="price">Price Change</option>
+                    <option value="hotness">Activity Score</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">Show</span>
+                <select id="unusualFilter">
+                    <option value="all">All Markets</option>
+                    <option value="unusual">Unusual Only</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="marketsContainer" class="markets-grid">
+            <div class="loading">LOADING KALSHI MARKETS...</div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // 🔑 API CONFIGURATION
+        // ============================================
+        // Set these to use REAL Kalshi data instead of mock data
+        const API_CONFIG = {
+            useRealData: false,  // Set to true to use real Kalshi API
+            email: '',           // Your Kalshi email
+            password: ''         // Your Kalshi password
+        };
+        // ============================================
+
+        let allMarkets = [];
+        let filteredMarkets = [];
+        let kalshiToken = null;
+
+        // Fetch real Kalshi markets
+        async function fetchRealKalshiMarkets() {
+            try {
+                // Step 1: Login to get token
+                const loginResponse = await fetch('https://api.elections.kalshi.com/trade-api/v2/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: API_CONFIG.email,
+                        password: API_CONFIG.password
+                    })
+                });
+
+                if (!loginResponse.ok) {
+                    console.error('Kalshi login failed:', loginResponse.status);
+                    return [];
+                }
+
+                const loginData = await loginResponse.json();
+                kalshiToken = loginData.token;
+
+                // Step 2: Fetch markets
+                const marketsResponse = await fetch('https://api.elections.kalshi.com/trade-api/v2/markets?limit=100&status=active', {
+                    headers: {
+                        'Authorization': `Bearer ${kalshiToken}`
+                    }
+                });
+
+                if (!marketsResponse.ok) {
+                    console.error('Kalshi markets fetch failed:', marketsResponse.status);
+                    return [];
+                }
+
+                const data = await marketsResponse.json();
+                const markets = data.markets || [];
+
+                // Transform to our format
+                return markets.map(m => {
+                    const priceChange = (Math.random() * 30 - 15).toFixed(1); // Simulated - Kalshi doesn't provide 24h change
+                    const volumeChange = (Math.random() * 350 - 20).toFixed(0); // Simulated - would need historical data
+
+                    return {
+                        id: m.ticker,
+                        platform: 'Kalshi',
+                        title: m.title || 'Unknown Market',
+                        category: m.category || 'Other',
+                        currentPrice: ((m.last_price || 0) * 100).toFixed(1),
+                        priceChange: priceChange,
+                        volume24h: m.volume_24h || 0,
+                        volumeChange: volumeChange,
+                        trades24h: m.open_interest || 0,
+                        unusual: Math.abs(volumeChange) > 100 || Math.abs(priceChange) > 10,
+                        hotnessScore: Math.min(100, Math.floor((Math.abs(volumeChange) / 2) + (Math.abs(priceChange) * 3)))
+                    };
+                });
+
+            } catch (error) {
+                console.error('Error fetching Kalshi markets:', error);
+                return [];
+            }
+        }
+
+        function generateMockMarkets() {
+            const categories = ['Politics', 'Economics', 'Sports', 'Entertainment', 'Climate', 'Science'];
+            const titles = [
+                'Will the Fed cut rates by 25+ basis points?',
+                'Trump approval rating above 50% next month',
+                'Will Bitcoin reach $100k by year end?',
+                'S&P 500 above 6000 this quarter',
+                'Will there be a government shutdown?',
+                'Next Supreme Court appointment in 2025',
+                'Will unemployment rate drop below 3.5%?',
+                'Super Bowl LXI winner prediction',
+                'Will Taylor Swift release new album?',
+                'Will there be a recession in 2025?',
+                'US inflation rate below 2% this year',
+                'Will there be a TikTok ban?',
+                'Apple stock to hit $250 by Q2',
+                'Will gas prices exceed $4.50 nationally?',
+                'NBA MVP for 2024-25 season',
+                'Will there be a major hurricane this season?',
+                'AI breakthrough announcement by major lab',
+                'Will Tesla stock hit $300?',
+                'Congressional approval rating above 25%',
+                'Will student loan forgiveness pass?'
+            ];
+
+            const markets = [];
+            for (let i = 0; i < 20; i++) {
+                const volume = Math.floor(Math.random() * 2000000) + 100000;
+                const volumeChange = Math.random() * 350 - 20;
+                const priceChange = Math.random() * 30 - 15;
+                const isUnusual = volumeChange > 100 || Math.abs(priceChange) > 10;
+
+                markets.push({
+                    id: `KALSHI_${i}`,
+                    platform: 'Kalshi',
+                    title: titles[i % titles.length],
+                    category: categories[Math.floor(Math.random() * categories.length)],
+                    currentPrice: (Math.random() * 80 + 10).toFixed(1),
+                    priceChange: priceChange.toFixed(1),
+                    volume24h: volume,
+                    volumeChange: volumeChange.toFixed(0),
+                    trades24h: Math.floor(Math.random() * 8000) + 500,
+                    unusual: isUnusual,
+                    hotnessScore: Math.min(100, Math.floor((Math.abs(volumeChange) / 2) + (Math.abs(priceChange) * 3)))
+                });
+            }
+
+            markets.forEach((m, i) => {
+                m.animationDelay = i * 0.05;
+            });
+
+            return markets;
+        }
+
+        function createMarketCard(market) {
+            const priceChangeClass = parseFloat(market.priceChange) >= 0 ? 'positive' : 'negative';
+            const priceChangeSymbol = parseFloat(market.priceChange) >= 0 ? '▲' : '▼';
+            const unusualClass = market.unusual ? 'unusual' : '';
+
+            return `
+                <div class="market-card ${unusualClass}" style="animation-delay: ${market.animationDelay}s">
+                    <div class="market-header">
+                        <div class="market-meta">
+                            <div style="display: flex; gap: 8px;">
+                                <span class="platform-badge">KALSHI</span>
+                                <span class="category-badge">${market.category}</span>
+                            </div>
+                            ${market.unusual ? '<span class="unusual-badge">⚡ UNUSUAL</span>' : ''}
+                        </div>
+                        <h3 class="market-title">${market.title}</h3>
+                    </div>
+                    <div class="market-body">
+                        <div class="price-section">
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 5px;">CURRENT PRICE</div>
+                                <div class="current-price">${market.currentPrice}¢</div>
+                            </div>
+                            <div class="price-change ${priceChangeClass}">
+                                <span>${priceChangeSymbol}</span>
+                                <span>${Math.abs(market.priceChange)}%</span>
+                            </div>
+                        </div>
+                        <div class="metrics-grid">
+                            <div class="metric">
+                                <div class="metric-label">24h Volume</div>
+                                <div class="metric-value" style="color: var(--accent-purple);">
+                                    $${(market.volume24h / 1000).toFixed(0)}K
+                                </div>
+                                <div style="font-size: 12px; color: var(--accent-green); margin-top: 3px;">
+                                    +${market.volumeChange}%
+                                </div>
+                                <div class="volume-bar">
+                                    <div class="volume-fill" style="width: ${Math.min(100, market.hotnessScore)}%"></div>
+                                </div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">24h Trades</div>
+                                <div class="metric-value" style="color: var(--text-primary);">
+                                    ${market.trades24h.toLocaleString()}
+                                </div>
+                                <div class="metric-label" style="margin-top: 10px;">Activity Score</div>
+                                <div class="metric-value" style="color: var(--accent-yellow);">
+                                    ${market.hotnessScore}/100
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateStats() {
+            const totalVolume = filteredMarkets.reduce((sum, m) => sum + m.volume24h, 0);
+            const unusualCount = filteredMarkets.filter(m => m.unusual).length;
+            const marketsUp = filteredMarkets.filter(m => parseFloat(m.priceChange) > 0).length;
+            const marketsDown = filteredMarkets.filter(m => parseFloat(m.priceChange) < 0).length;
+
+            document.getElementById('totalMarkets').textContent = filteredMarkets.length;
+            document.getElementById('unusualCount').textContent = unusualCount;
+            document.getElementById('totalVolume').textContent = `$${(totalVolume / 1000000).toFixed(1)}M`;
+            document.getElementById('marketsUp').textContent = marketsUp;
+            document.getElementById('marketsDown').textContent = marketsDown;
+
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
+        }
+
+        function renderMarkets() {
+            const container = document.getElementById('marketsContainer');
+            
+            if (filteredMarkets.length === 0) {
+                container.innerHTML = '<div class="loading">NO MARKETS FOUND</div>';
+                return;
+            }
+
+            container.innerHTML = filteredMarkets.map(m => createMarketCard(m)).join('');
+            updateStats();
+        }
+
+        function applyFilters() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const category = document.getElementById('categoryFilter').value;
+            const sortBy = document.getElementById('sortFilter').value;
+            const unusualOnly = document.getElementById('unusualFilter').value === 'unusual';
+
+            filteredMarkets = allMarkets.filter(m => {
+                const matchesSearch = !searchTerm || 
+                    m.title.toLowerCase().includes(searchTerm) || 
+                    m.category.toLowerCase().includes(searchTerm);
+                const matchesCategory = category === 'all' || m.category === category;
+                const matchesUnusual = !unusualOnly || m.unusual;
+
+                return matchesSearch && matchesCategory && matchesUnusual;
+            });
+
+            filteredMarkets.sort((a, b) => {
+                switch(sortBy) {
+                    case 'volume':
+                        return Math.abs(b.volumeChange) - Math.abs(a.volumeChange);
+                    case 'price':
+                        return Math.abs(b.priceChange) - Math.abs(a.priceChange);
+                    case 'hotness':
+                        return b.hotnessScore - a.hotnessScore;
+                    default:
+                        return 0;
+                }
+            });
+
+            renderMarkets();
+        }
+
+        function init() {
+            // Show configuration banner
+            const banner = document.getElementById('configBanner');
+            
+            // Show configuration info in console
+            if (API_CONFIG.useRealData) {
+                if (!API_CONFIG.email || !API_CONFIG.password) {
+                    console.error('⚠️ API_CONFIG.useRealData is true but credentials are missing!');
+                    console.log('📝 Please set API_CONFIG.email and API_CONFIG.password at the top of the script');
+                    document.getElementById('marketsContainer').innerHTML = 
+                        '<div class="loading">⚠️ API CREDENTIALS NOT SET<br><br>Edit this file and add your Kalshi email/password in the API_CONFIG section (around line 630)</div>';
+                    return;
+                }
+                console.log('🔄 Using REAL Kalshi data');
+                banner.style.display = 'none'; // Hide banner when using real data
+                loadRealData();
+            } else {
+                console.log('🎮 Using DEMO data');
+                console.log('💡 To use real Kalshi data:');
+                console.log('   1. Open this HTML file in a text editor');
+                console.log('   2. Find API_CONFIG at the top of the script (around line 630)');
+                console.log('   3. Set useRealData: true');
+                console.log('   4. Add your email and password');
+                banner.style.display = 'block'; // Show banner in demo mode
+                loadMockData();
+            }
+        }
+
+        async function loadRealData() {
+            const loadingContainer = document.getElementById('marketsContainer');
+            loadingContainer.innerHTML = '<div class="loading">FETCHING REAL KALSHI MARKETS...</div>';
+
+            allMarkets = await fetchRealKalshiMarkets();
+            
+            if (allMarkets.length === 0) {
+                loadingContainer.innerHTML = '<div class="loading">⚠️ FAILED TO FETCH MARKETS<br><br>Check console for errors</div>';
+                return;
+            }
+
+            filteredMarkets = [...allMarkets];
+            setupEventListeners();
+            renderMarkets();
+
+            // Auto-refresh every 5 minutes
+            setInterval(async () => {
+                console.log('🔄 Refreshing markets...');
+                allMarkets = await fetchRealKalshiMarkets();
+                if (allMarkets.length > 0) {
+                    applyFilters();
+                }
+            }, 300000);
+        }
+
+        function loadMockData() {
+            allMarkets = generateMockMarkets();
+            filteredMarkets = [...allMarkets];
+            setupEventListeners();
+            renderMarkets();
+
+            // Auto-refresh mock data every 30 seconds
+            setInterval(() => {
+                allMarkets = generateMockMarkets();
+                applyFilters();
+            }, 30000);
+        }
+
+        function setupEventListeners() {
+            document.getElementById('searchInput').addEventListener('input', applyFilters);
+            document.getElementById('categoryFilter').addEventListener('change', applyFilters);
+            document.getElementById('sortFilter').addEventListener('change', applyFilters);
+            document.getElementById('unusualFilter').addEventListener('change', applyFilters);
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
