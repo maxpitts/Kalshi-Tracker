@@ -367,6 +367,108 @@
             margin: 0;
         }
 
+        /* New Kalshi-style layout */
+        .market-body-new {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .price-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .price-btn {
+            background: var(--terminal-bg);
+            border: 1px solid var(--terminal-border);
+            border-radius: 6px;
+            padding: 14px;
+            text-align: center;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .price-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .yes-btn {
+            border-left: 3px solid var(--accent-green);
+        }
+
+        .yes-btn:hover {
+            background: rgba(0, 255, 136, 0.05);
+            border-color: var(--accent-green);
+        }
+
+        .no-btn {
+            border-left: 3px solid var(--accent-red);
+        }
+
+        .no-btn:hover {
+            background: rgba(255, 68, 68, 0.05);
+            border-color: var(--accent-red);
+        }
+
+        .btn-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-price {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .btn-subtext {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .market-stats-new {
+            display: flex;
+            gap: 20px;
+            padding-top: 15px;
+            border-top: 1px solid var(--terminal-border);
+        }
+
+        .stat-item-new {
+            flex: 1;
+        }
+
+        .stat-label-new {
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 600;
+        }
+
+        .stat-value-new {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+
+        .stat-value-new.positive {
+            color: var(--accent-green);
+        }
+
+        .stat-value-new.negative {
+            color: var(--accent-red);
+        }
+
         .market-body {
             padding: 20px;
         }
@@ -790,52 +892,47 @@
             const platformClass = market.platform.toLowerCase();
             const unusualClass = market.unusual ? 'unusual' : '';
 
+            // Calculate YES and NO percentages
+            const yesPercent = Math.round(parseFloat(market.currentPrice));
+            const noPercent = 100 - yesPercent;
+            const yesPrice = parseFloat(market.currentPrice).toFixed(1);
+            const noPrice = (100 - parseFloat(market.currentPrice)).toFixed(1);
+
             return `
                 <div class="market-card ${unusualClass}" style="animation-delay: ${market.animationDelay || 0}s; cursor: pointer;" onclick="openMarketModal(${JSON.stringify(market).replace(/"/g, '&quot;')})">
                     <div class="market-header">
                         <div class="market-meta">
-                            <div style="display: flex; gap: 8px;">
-                                <span class="platform-badge ${platformClass}">${market.platform}</span>
-                                <span class="category-badge">${market.category}</span>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                ${market.unusual ? '<span class="unusual-badge">⚡ HOT</span>' : ''}
+                                ${market.category && market.category !== 'Other' ? `<span class="category-badge">${market.category}</span>` : ''}
                             </div>
-                            ${market.unusual ? '<span class="unusual-badge">⚡ UNUSUAL</span>' : ''}
                         </div>
                         <h3 class="market-title">${market.title}</h3>
                     </div>
-                    <div class="market-body">
-                        <div class="price-section">
-                            <div>
-                                <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 5px;">CURRENT PRICE</div>
-                                <div class="current-price">${market.currentPrice}¢</div>
+                    <div class="market-body-new">
+                        <div class="price-buttons">
+                            <div class="price-btn yes-btn">
+                                <div class="btn-label">YES</div>
+                                <div class="btn-price">${yesPercent}%</div>
+                                <div class="btn-subtext">${yesPrice}¢</div>
                             </div>
-                            <div class="price-change ${priceChangeClass}">
-                                <span>${priceChangeSymbol}</span>
-                                <span>${Math.abs(market.priceChange)}%</span>
+                            <div class="price-btn no-btn">
+                                <div class="btn-label">NO</div>
+                                <div class="btn-price">${noPercent}%</div>
+                                <div class="btn-subtext">${noPrice}¢</div>
                             </div>
                         </div>
-                        <div class="metrics-grid">
-                            <div class="metric">
-                                <div class="metric-label">24h Volume</div>
-                                <div class="metric-value" style="color: var(--accent-blue);">
-                                    ${formatNumber(market.volume24h)}
-                                </div>
-                                <div style="font-size: 12px; color: var(--accent-green); margin-top: 3px;">
-                                    ${parseFloat(market.volumeChange) >= 0 ? '+' : ''}${market.volumeChange}%
-                                </div>
-                                <div class="volume-bar">
-                                    <div class="volume-fill" style="width: ${Math.min(100, market.hotnessScore)}%"></div>
-                                </div>
+                        <div class="market-stats-new">
+                            <div class="stat-item-new">
+                                <div class="stat-label-new">Volume</div>
+                                <div class="stat-value-new">${formatNumber(market.volume24h)}</div>
                             </div>
-                            <div class="metric">
-                                <div class="metric-label">24h Trades</div>
-                                <div class="metric-value" style="color: var(--text-primary);">
-                                    ${market.trades24h.toLocaleString()}
-                                </div>
-                                <div class="metric-label" style="margin-top: 10px;">Activity Score</div>
-                                <div class="metric-value" style="color: var(--accent-yellow);">
-                                    ${market.hotnessScore}/100
-                                </div>
+                            ${Math.abs(parseFloat(market.priceChange)) > 1 ? `
+                            <div class="stat-item-new">
+                                <div class="stat-label-new">24h</div>
+                                <div class="stat-value-new ${priceChangeClass}">${priceChangeSymbol}${Math.abs(market.priceChange)}%</div>
                             </div>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
