@@ -55,32 +55,118 @@ function signRequest(method, path) {
     }
 }
 
-// Fetch real Kalshi markets
+// Fetch real Kalshi markets with pagination
 async function fetchKalshiMarkets() {
-    const path = '/trade-api/v2/markets?limit=200'; // Removed invalid status filter
-    const headers = signRequest('GET', path);
+    try {
+        let allMarkets = [];
+        let cursor = null;
+        let pageCount = 0;
+        const maxPages = 10; // Safety limit
 
-    if (!headers) {
-        throw new Error('Could not sign request - check API keys');
-    }
+        // Fetch markets with pagination
+        do {
+            const path = `/trade-api/v2/markets?limit=1000${cursor ? `&cursor=${cursor}` : ''}`;
+            const headers = signRequest('GET', path);
 
-    const response = await fetch(BASE_URL + path, { headers });
-    
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Kalshi API error: ${response.status} - ${errorText}`);
-    }
+            if (!headers) {
+                throw new Error('Could not sign request - check API keys');
+            }
 
-    const data = await response.json();
-    
-    // Log sample market data to see structure
-    if (data.markets && data.markets.length > 0) {
-        console.log('📊 Sample Kalshi market data:');
-        console.log(JSON.stringify(data.markets[0], null, 2));
-        console.log('📋 Available fields:', Object.keys(data.markets[0]));
+            const response = await fetch(BASE_URL + path, { headers });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Kalshi API error: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            const markets = data.markets || [];
+            allMarkets = allMarkets.concat(markets);
+            
+            cursor = data.cursor;
+            pageCount++;
+            
+            console.log(`📄 Fetched page ${pageCount}: ${markets.length} markets (total: ${allMarkets.length})`);
+            
+        } while (cursor && pageCount < maxPages);
+
+        console.log(`✅ Total markets fetched: ${allMarkets.length}`);
+
+        // Now fetch events to get categories (markets don't have category field)
+        const eventCategories = await fetchEventCategories();
+        
+        // Map categories to markets based on event_ticker
+        allMarkets = allMarkets.map(market => {
+            const category = eventCategories[market.event_ticker] || 'Other';
+            return { ...market, category };
+        });
+
+        // Log sample market with category
+        if (allMarkets.length > 0) {
+            console.log('📊 Sample market with category:', {
+                ticker: allMarkets[0].ticker,
+                title: allMarkets[0].title,
+                event_ticker: allMarkets[0].event_ticker,
+                category: allMarkets[0].category
+            });
+        }
+
+        return allMarkets;
+    } catch (error) {
+        console.error('Error fetching markets:', error);
+        return [];
     }
-    
-    return data.markets || [];
+}
+
+// Fetch event categories
+async function fetchEventCategories() {
+    try {
+        let allEvents = [];
+        let cursor = null;
+        let pageCount = 0;
+        const maxPages = 5;
+
+        do {
+            const path = `/trade-api/v2/events?limit=200${cursor ? `&cursor=${cursor}` : ''}`;
+            const headers = signRequest('GET', path);
+
+            if (!headers) {
+                return {};
+            }
+
+            const response = await fetch(BASE_URL + path, { headers });
+            
+            if (!response.ok) {
+                console.error('Error fetching events:', response.status);
+                return {};
+            }
+
+            const data = await response.json();
+            const events = data.events || [];
+            allEvents = allEvents.concat(events);
+            
+            cursor = data.cursor;
+            pageCount++;
+            
+            console.log(`📅 Fetched events page ${pageCount}: ${events.length} events (total: ${allEvents.length})`);
+            
+        } while (cursor && pageCount < maxPages);
+
+        // Create event_ticker -> category mapping
+        const categoryMap = {};
+        allEvents.forEach(event => {
+            if (event.event_ticker && event.category) {
+                categoryMap[event.event_ticker] = event.category;
+            }
+        });
+
+        console.log(`✅ Mapped ${Object.keys(categoryMap).length} events to categories`);
+        
+        return categoryMap;
+    } catch (error) {
+        console.error('Error fetching event categories:', error);
+        return {};
+    }
 }
 
 // Generate demo markets (fallback)
@@ -194,21 +280,8 @@ app.get('/api/markets', async (req, res) => {
                 // Get volume - try multiple fields
                 const volume = m.volume || m.liquidity || m.open_interest || 0;
                 
-                // Get category - extract from event_ticker if category is empty
-                let category = m.category || 'Other';
-                if (!category || category === '') {
-                    // Try to extract from event_ticker (e.g., "KXNFLRECSY..." might indicate NFL)
-                    const ticker = m.event_ticker || m.ticker || '';
-                    if (ticker.includes('NFL') || ticker.includes('NBA') || ticker.includes('SPORT')) {
-                        category = 'Sports';
-                    } else if (ticker.includes('PRES') || ticker.includes('POL')) {
-                        category = 'Politics';
-                    } else if (ticker.includes('ECON') || ticker.includes('FED')) {
-                        category = 'Economics';
-                    } else {
-                        category = 'Other';
-                    }
-                }
+                // Category now comes from event mapping (set during fetchKalshiMarkets)
+                const category = m.category || 'Other';
 
                 return {
                     id: m.ticker || `MARKET-${Math.random().toString(36).substr(2, 9)}`,
