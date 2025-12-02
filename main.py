@@ -197,7 +197,7 @@ def analyze_market_flow(market: Dict[str, Any]) -> Dict[str, Any]:
 # API ENDPOINTS
 # ==========================================
 
-@app.get("/api/kalshi/markets")
+@app.get("/api/markets")
 async def get_markets():
     """
     Get top trending markets with PRO flow analysis
